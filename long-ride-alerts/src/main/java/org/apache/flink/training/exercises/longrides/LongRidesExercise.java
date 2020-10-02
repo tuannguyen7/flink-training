@@ -18,6 +18,13 @@
 
 package org.apache.flink.training.exercises.longrides;
 
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.Temporal;
+import java.time.temporal.TemporalUnit;
+import org.apache.flink.api.common.state.ValueState;
+import org.apache.flink.api.common.state.ValueStateDescriptor;
+import org.apache.flink.api.java.tuple.Tuple;
+import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.TimerService;
@@ -27,7 +34,6 @@ import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
 import org.apache.flink.training.exercises.common.datatypes.TaxiRide;
 import org.apache.flink.training.exercises.common.sources.TaxiRideGenerator;
 import org.apache.flink.training.exercises.common.utils.ExerciseBase;
-import org.apache.flink.training.exercises.common.utils.MissingSolutionException;
 import org.apache.flink.util.Collector;
 
 /**
@@ -65,18 +71,36 @@ public class LongRidesExercise extends ExerciseBase {
 
 	public static class MatchFunction extends KeyedProcessFunction<Long, TaxiRide, TaxiRide> {
 
+		private ValueState<TaxiRide> state;
+
 		@Override
 		public void open(Configuration config) throws Exception {
-			throw new MissingSolutionException();
+			state = getRuntimeContext().getState(new ValueStateDescriptor<>("myState", TaxiRide.class));
 		}
 
 		@Override
 		public void processElement(TaxiRide ride, Context context, Collector<TaxiRide> out) throws Exception {
 			TimerService timerService = context.timerService();
+			TaxiRide taxi = state.value();
+      if (taxi == null) {
+        if (ride.isStart) {
+          if (ride.startTime.plus(2, ChronoUnit.HOURS).toEpochMilli() <= (timerService.currentWatermark())) {
+						state.update(ride);
+						timerService.registerEventTimeTimer(taxi.startTime.toEpochMilli() + 2 * 60 * 60 * 1000);
+					}
+				} else {
+        	state.update(ride);
+				}
+			}
 		}
 
 		@Override
 		public void onTimer(long timestamp, OnTimerContext context, Collector<TaxiRide> out) throws Exception {
+			TaxiRide ride = state.value();
+			if (ride.isStart) {
+				out.collect(ride);
+			}
+			state.clear();
 		}
 	}
 }

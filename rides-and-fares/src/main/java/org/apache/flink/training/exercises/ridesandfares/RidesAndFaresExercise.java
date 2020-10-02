@@ -18,6 +18,9 @@
 
 package org.apache.flink.training.exercises.ridesandfares;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -70,17 +73,31 @@ public class RidesAndFaresExercise extends ExerciseBase {
 
 	public static class EnrichmentFunction extends RichCoFlatMapFunction<TaxiRide, TaxiFare, Tuple2<TaxiRide, TaxiFare>> {
 
+		Map<Long, TaxiRide> rides;
+		Map<Long, TaxiFare> fares;
+
 		@Override
 		public void open(Configuration config) throws Exception {
-			throw new MissingSolutionException();
+			rides = new HashMap<>();
+			fares = new HashMap<>();
 		}
 
 		@Override
 		public void flatMap1(TaxiRide ride, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
+		  if (fares.containsKey(ride.rideId)) {
+		  	out.collect(Tuple2.of(ride, fares.get(ride.rideId)));
+			} else {
+		  	rides.put(ride.rideId, ride);
+			}
 		}
 
 		@Override
 		public void flatMap2(TaxiFare fare, Collector<Tuple2<TaxiRide, TaxiFare>> out) throws Exception {
+			if (rides.containsKey(fare.rideId)) {
+				out.collect(Tuple2.of(rides.get(fare.rideId), fare));
+			} else {
+				fares.put(fare.rideId, fare);
+			}
 		}
 	}
 }
